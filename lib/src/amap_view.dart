@@ -1,5 +1,6 @@
 
 import 'package:flutter_amap/flutter_amap.dart';
+import 'package:flutter_amap/src/mark.dart';
 
 import 'latlng.dart';
 import 'region.dart';
@@ -23,7 +24,7 @@ typedef void LocationChange(Location location);
  * - nav: 导航地图
  * - bus: 公交地图
  */
-enum MapType { standard, satellite, night, nav, bus }
+enum MapType { _na, standard, satellite, night, nav, bus }
 
 /// 这个应该有更好的实现，比如在最外层增加InheritedWidget,
 /// 内部可以感知并实现地图的登记处理
@@ -183,7 +184,7 @@ class AMapView extends StatefulWidget {
 
 
   final LocationChange onLocationChange;
-
+  final LocationChange onMarkerLocationChange;
 
 
 
@@ -236,6 +237,7 @@ class AMapView extends StatefulWidget {
     this.scrollEnabled : true,
     this.mapType : MapType.standard,
     this.onLocationChange,
+    this.onMarkerLocationChange,
 
     Key key,
 
@@ -323,6 +325,7 @@ class AMapView extends StatefulWidget {
     String method = call.method;
     switch(method){
       case "locationUpdate":
+      case "markerLocationUpdate":
         {
           Map args = call.arguments;
           String id = args["id"];
@@ -330,7 +333,11 @@ class AMapView extends StatefulWidget {
           GlobalKey key = map[id];
           if(key!=null){
             AMapView view = key.currentWidget;
-            view?.onLocationChange( Location.fromMap(args) );
+            if (method == "locationUpdate") {
+              view?.onLocationChange( Location.fromMap(args) );
+            } else if (method == "markerLocationUpdate") {
+              view?.onMarkerLocationChange( Location.fromMap(args) );
+            }
           }
           //_locationChangeStreamController.add(Location.fromMap(args));
           return new Future.value("");

@@ -1,14 +1,12 @@
 package com.jzoom.flutteramap;
 
-import android.app.Activity;
-import android.content.Intent;
+import android.location.Location;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
-import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
-import android.widget.RelativeLayout;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -19,6 +17,13 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.plugin.common.PluginRegistry.Registrar;
 
+import com.amap.api.maps.AMap;
+import com.amap.api.maps.CameraUpdateFactory;
+import com.amap.api.maps.model.Marker;
+import com.amap.api.maps.model.MarkerOptions;
+import com.amap.api.maps.model.LatLng;
+import com.amap.api.maps.model.MyLocationStyle;
+
 /**
  * FlutterAmapPlugin
  */
@@ -28,9 +33,12 @@ public class FlutterAmapPlugin implements MethodCallHandler {
 
   static AMapViewManager manager;
 
+  private MethodChannel channel;
+
   public FlutterAmapPlugin(FlutterActivity activity, MethodChannel channel) {
     this.root = activity;
     this.manager = new AMapViewManager(channel);
+    this.channel = channel;
   }
 
 
@@ -43,16 +51,87 @@ public class FlutterAmapPlugin implements MethodCallHandler {
     channel.setMethodCallHandler(new FlutterAmapPlugin( (FlutterActivity) registrar.activity(),channel ));
   }
 
-  private AMapView createView(String id){
+  private AMapView createView(final String id, final Map<String,Object> mapViewOptions){
+      Map<String,Object> centerCoordinate = (Map<String, Object>) mapViewOptions.get("centerCoordinate");
+
       AMapView view = new AMapView(root);
       view.setKey(id);
-      map.put(id,view);
+      MyLocationStyle myLocationStyle;
+      myLocationStyle = new MyLocationStyle();
+      myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATE);
+      AMap aMap = view.getMap();
+      aMap.setMyLocationStyle(myLocationStyle);//设置定位蓝点的Style
+      aMap.getUiSettings().setMyLocationButtonEnabled(true);
+      aMap.setMyLocationEnabled(true); // 设置为true表示启动显示定位蓝点，false表示隐藏定位蓝点并不进行定位，默认是false。
+      aMap.setMapType((Integer) mapViewOptions.get("mapType"));
+
+      aMap.moveCamera(CameraUpdateFactory.zoomTo((float)(double)(Double) mapViewOptions.get("zoomLevel")));
+      aMap.setMaxZoomLevel( (float)(double)(Double) mapViewOptions.get("maxZoomLevel")    );
+      aMap.setMinZoomLevel( (float)(double)(Double) mapViewOptions.get("minZoomLevel")    );
+      if(centerCoordinate!=null){
+          Double latitude = (Double) centerCoordinate.get("latitude");
+          Double longitude = (Double) centerCoordinate.get("longitude");
+          aMap.moveCamera(CameraUpdateFactory.changeLatLng(new LatLng(
+                  latitude,
+                  longitude)));
+          view.getMap().setOnMyLocationChangeListener(new AMap.OnMyLocationChangeListener() {
+              @Override
+              public void onMyLocationChange(Location location) {
+                  updateMarkerPosition(id, new LatLng(location.getLatitude(), location.getLongitude()));
+              }
+          });
+          view.getMap().setOnMapClickListener(
+                  new AMap.OnMapClickListener() {
+                      @Override
+                      public void onMapClick(LatLng latLng) {
+                          updateMarkerPosition(id, latLng);
+                      }
+                  }
+          );
+      }
+      this.map.put(id,view);
       return view;
   }
 
-  private Map<String,AMapView> map =  new ConcurrentHashMap<>();
+    private void updateMarkerPosition(String id, LatLng latLng) {
+        AMapView view = this.map.get(id);
+        Marker marker;
+        if (view == null) return;
+        if (!this.markers.containsKey(id) || this.markers.get(id) == null) {
+            final MarkerOptions options = new MarkerOptions();
+            options.position(new LatLng(
+                    latLng.latitude,
+                    latLng.longitude
+            )).title(
+                    "定位点"
+            ).snippet(
+                    "点击地图修改定位点位置"
+            ).draggable(false);
+            marker = view.getMap().addMarker(options);
+            this.markers.put(id, marker);
+        } else {
+            marker = this.markers.get(id);
+            marker.setPosition(latLng);
+        }
 
-  private AMapView getView(String id){
+        if (channel != null) {
+            Map<String, Object> map = new HashMap<String, Object>();
+            map.put("latitude", marker.getPosition().latitude);
+            map.put("longitude", marker.getPosition().longitude);
+            map.put("accuracy", 0.0d);
+            map.put("altitude", 0.0d);
+            map.put("speed", 0.0d);
+            map.put("timestamp", 0.0d);
+            map.put("id", id);
+            channel.invokeMethod("markerLocationUpdate", map);
+        }
+    }
+
+    private Map<String,AMapView> map =  new ConcurrentHashMap<>();
+  private Map<String,Marker> markers =  new ConcurrentHashMap<>();
+
+
+    private AMapView getView(String id){
       return map.get(id);
   }
 
@@ -61,13 +140,14 @@ public class FlutterAmapPlugin implements MethodCallHandler {
     String method = call.method;
     if ("show".equals(method)) {
         Map<String,Object> args = (Map<String, Object>) call.arguments;
-        Map<String,Object> mapViewOptions = (Map<String, Object>) args.get("mapView");
+        final Map<String,Object> mapViewOptions = (Map<String, Object>) args.get("mapView");
+
         final String id = (String) args.get("id");
 
         root.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                AMapView view = createView(id);
+                AMapView view = createView(id, mapViewOptions);
                 view.onCreate(new Bundle());
                 view.onResume();
                 root.addContentView(  view,new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT));
@@ -108,7 +188,7 @@ public class FlutterAmapPlugin implements MethodCallHandler {
     }else if("remove".equals(method)){
         Map<String,Object> args = (Map<String, Object>) call.arguments;
         String id = (String) args.get("id");
-        View view = map.get(id);
+        final AMapView view = getView(id);
         if(view != null){
             ViewGroup viewGroup = (ViewGroup) view.getParent();
             viewGroup.removeView(view);
