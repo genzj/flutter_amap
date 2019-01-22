@@ -1,6 +1,5 @@
 
 import 'package:flutter_amap/flutter_amap.dart';
-import 'package:flutter_amap/src/mark.dart';
 
 import 'latlng.dart';
 import 'region.dart';
