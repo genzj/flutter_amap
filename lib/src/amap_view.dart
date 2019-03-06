@@ -1,5 +1,6 @@
 
 import 'package:flutter_amap/flutter_amap.dart';
+import 'package:flutter_amap/src/location_description.dart';
 
 import 'latlng.dart';
 import 'region.dart';
@@ -13,6 +14,7 @@ import 'package:flutter/rendering.dart';
 
 
 typedef void LocationChange(Location location);
+typedef void LocationDescriptionChange(LocationDescription description);
 
 /**
  * 地图类型
@@ -184,7 +186,7 @@ class AMapView extends StatefulWidget {
 
   final LocationChange onLocationChange;
   final LocationChange onMarkerLocationChange;
-
+  final LocationDescriptionChange onMarkerDescriptionChange;
 
 
   /**
@@ -237,6 +239,7 @@ class AMapView extends StatefulWidget {
     this.mapType : MapType.standard,
     this.onLocationChange,
     this.onMarkerLocationChange,
+    this.onMarkerDescriptionChange,
 
     Key key,
 
@@ -325,6 +328,7 @@ class AMapView extends StatefulWidget {
     switch(method){
       case "locationUpdate":
       case "markerLocationUpdate":
+      case "markerDescriptionUpdate":
         {
           Map args = call.arguments;
           String id = args["id"];
@@ -336,6 +340,11 @@ class AMapView extends StatefulWidget {
               view?.onLocationChange( Location.fromMap(args) );
             } else if (method == "markerLocationUpdate") {
               view?.onMarkerLocationChange( Location.fromMap(args) );
+            } else if (method == "markerDescriptionUpdate") {
+              if (view?.onMarkerDescriptionChange != null) {
+                LocationDescription description = LocationDescription.fromMap(args);
+                view.onMarkerDescriptionChange(description);
+              }
             }
           }
           //_locationChangeStreamController.add(Location.fromMap(args));

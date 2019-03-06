@@ -8,6 +8,7 @@ export 'src/region.dart';
 export 'src/amap_view.dart';
 export 'src/title_options.dart';
 export 'src/location.dart';
+export 'src/location_description.dart';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_amap/src/amap_view.dart';
