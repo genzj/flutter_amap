@@ -58,13 +58,13 @@ public class FlutterAmapPlugin implements MethodCallHandler {
     }
 
     private AMapView createView(final String id, final Map<String, Object> mapViewOptions) {
-        Map<String, Object> centerCoordinate = (Map<String, Object>) mapViewOptions.get("centerCoordinate");
+        final Map<String, Object> centerCoordinate = (Map<String, Object>) mapViewOptions.get("centerCoordinate");
 
         AMapView view = new AMapView(root);
         view.setKey(id);
         MyLocationStyle myLocationStyle;
         myLocationStyle = new MyLocationStyle();
-        myLocationStyle.myLocationType(MyLocationStyle.LOCATION_TYPE_LOCATE);
+        myLocationStyle.myLocationType(centerCoordinate == null ? MyLocationStyle.LOCATION_TYPE_LOCATE : MyLocationStyle.LOCATION_TYPE_SHOW);
         AMap aMap = view.getMap();
         aMap.setMyLocationStyle(myLocationStyle);//设置定位蓝点的Style
         aMap.getUiSettings().setMyLocationButtonEnabled(true);
@@ -74,28 +74,32 @@ public class FlutterAmapPlugin implements MethodCallHandler {
         aMap.moveCamera(CameraUpdateFactory.zoomTo((float) (double) (Double) mapViewOptions.get("zoomLevel")));
         aMap.setMaxZoomLevel((float) (double) (Double) mapViewOptions.get("maxZoomLevel"));
         aMap.setMinZoomLevel((float) (double) (Double) mapViewOptions.get("minZoomLevel"));
+
+        aMap.setOnMyLocationChangeListener(new AMap.OnMyLocationChangeListener() {
+            @Override
+            public void onMyLocationChange(Location location) {
+                if (centerCoordinate == null) {
+                    updateMarkerPosition(id, new LatLng(location.getLatitude(), location.getLongitude()));
+                }
+            }
+        });
+        aMap.setOnMapClickListener(new AMap.OnMapClickListener() {
+                                       @Override
+                                       public void onMapClick(LatLng latLng) {
+                                           updateMarkerPosition(id, latLng);
+                                       }
+                                   }
+        );
+        this.map.put(id, view);
+
         if (centerCoordinate != null) {
             Double latitude = (Double) centerCoordinate.get("latitude");
             Double longitude = (Double) centerCoordinate.get("longitude");
             aMap.moveCamera(CameraUpdateFactory.changeLatLng(new LatLng(
                     latitude,
                     longitude)));
-            view.getMap().setOnMyLocationChangeListener(new AMap.OnMyLocationChangeListener() {
-                @Override
-                public void onMyLocationChange(Location location) {
-                    updateMarkerPosition(id, new LatLng(location.getLatitude(), location.getLongitude()));
-                }
-            });
-            view.getMap().setOnMapClickListener(
-                    new AMap.OnMapClickListener() {
-                        @Override
-                        public void onMapClick(LatLng latLng) {
-                            updateMarkerPosition(id, latLng);
-                        }
-                    }
-            );
+            updateMarkerPosition(id, new LatLng(latitude, longitude));
         }
-        this.map.put(id, view);
         return view;
     }
 
